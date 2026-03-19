@@ -428,10 +428,39 @@ const SN_TARGET = [
 ];
 const SN_TOTAL_REV = SN_STORES.reduce((s,x)=>s+x.rev,0);
 
+// === TRADE ROUTES (from All Father) ===
+const TRADE_ROUTES = [
+  {startLat:26.6,startLng:56.3,endLat:1.3,endLng:103.8,label:'Hormuz-Singapore',color:'rgba(255,184,76,0.5)'},
+  {startLat:26.6,startLng:56.3,endLat:35.7,endLng:139.7,label:'Hormuz-Tokyo',color:'rgba(255,184,76,0.4)'},
+  {startLat:26.6,startLng:56.3,endLat:31.2,endLng:121.5,label:'Hormuz-Shanghai',color:'rgba(255,184,76,0.4)'},
+  {startLat:26.6,startLng:56.3,endLat:51.2,endLng:3.7,label:'Hormuz-Rotterdam',color:'rgba(255,184,76,0.5)'},
+  {startLat:30.5,startLng:32.3,endLat:51.2,endLng:3.7,label:'Suez-Rotterdam',color:'rgba(100,240,200,0.4)'},
+  {startLat:30.5,startLng:32.3,endLat:40.7,endLng:-73.9,label:'Suez-NYC',color:'rgba(100,240,200,0.3)'},
+  {startLat:12.6,startLng:43.3,endLat:30.5,endLng:32.3,label:'Bab el-Mandeb-Suez',color:'rgba(255,95,99,0.5)'},
+  {startLat:24.0,startLng:119.5,endLat:37.8,endLng:-122.4,label:'Taiwan-SF (chips)',color:'rgba(68,204,255,0.5)'},
+  {startLat:24.0,startLng:119.5,endLat:35.7,endLng:139.7,label:'Taiwan-Tokyo (chips)',color:'rgba(68,204,255,0.4)'},
+  {startLat:9.1,startLng:-79.9,endLat:37.8,endLng:-122.4,label:'Panama-SF',color:'rgba(100,240,200,0.3)'},
+  {startLat:9.1,startLng:-79.9,endLat:40.7,endLng:-73.9,label:'Panama-NYC',color:'rgba(100,240,200,0.3)'},
+  {startLat:46.5,startLng:31.0,endLat:41.9,endLng:12.5,label:'Odessa-Rome (grain)',color:'rgba(205,220,57,0.4)'},
+  {startLat:46.5,startLng:31.0,endLat:41.0,endLng:29.0,label:'Odessa-Istanbul (grain)',color:'rgba(205,220,57,0.4)'},
+];
+
+// === SUPPLY CHAIN DISRUPTIONS ===
+const SC_DISRUPTIONS = [
+  {lat:26.6,lng:56.3,name:'Strait of Hormuz',sev:'critical',impact:'21% global oil transit at risk',maxR:4,speed:2,period:1000},
+  {lat:30.5,lng:32.3,name:'Suez Canal',sev:'warning',impact:'12% global trade volume affected',maxR:3,speed:1.5,period:1200},
+  {lat:12.6,lng:43.3,name:'Bab el-Mandeb',sev:'critical',impact:'Shipping rerouted via Cape',maxR:4,speed:2,period:1000},
+  {lat:46.5,lng:31.0,name:'Black Sea Grain',sev:'elevated',impact:'Ukraine grain exports disrupted',maxR:3,speed:1.5,period:1500},
+  {lat:24.0,lng:119.5,name:'Taiwan Strait',sev:'watch',impact:'90% advanced chip exposure',maxR:3,speed:1,period:2000},
+  {lat:9.1,lng:-79.9,name:'Panama Canal',sev:'warning',impact:'40% capacity reduction (drought)',maxR:3,speed:1.5,period:1500},
+];
+
 // === GLOBALS ===
 let globe = null;
 let globeInitialized = false;
 let showStoreLayer = false;
+let showTradeRoutes = true;
+let earthquakeData = [];
 let flightsVisible = true;
 let lowPerfMode = localStorage.getItem('crucix_low_perf') === 'true';
 let isFlat = shouldStartFlat();
@@ -644,7 +673,9 @@ function renderLeftRail(){
     {name:'Health Watch',count:D.who.length,dot:'health',sub:'WHO alerts'},
     {name:'World News',count:newsCount,dot:'news',sub:'RSS geolocated'},
     {name:'OSINT Feed',count:D.tg.posts,dot:'incident',sub:`${D.tg.urgent.length} urgent`},
-    {name:'Satellites',count:D.space?.militarySats||0,dot:'space',sub:`${D.space?.totalNewObjects||0} new (30d)`}
+    {name:'Satellites',count:D.space?.militarySats||0,dot:'space',sub:`${D.space?.totalNewObjects||0} new (30d)`},
+    {name:'Earthquakes',count:`<span id="quakeCount2">0</span>`,dot:'thermal',sub:'USGS M2.5+ 24h'},
+    {name:'Trade Routes',count:TRADE_ROUTES.length,dot:'maritime',sub:'global supply arcs'}
   ];
   const allNormal=D.nuke.every(s=>!s.anom);
   const nukeHtml=D.nuke.map(s=>`<div class="site-row"><span>${s.site}</span><span class="site-val">${s.n>0?(s.cpm?.toFixed(1)||'--')+' CPM':'No data'}</span></div>`).join('');
@@ -833,11 +864,11 @@ function initGlobe(){
 
   // Auto-rotate slowly
   globe.controls().autoRotate = !lowPerfMode;
-  globe.controls().autoRotateSpeed = 0.6;
+  globe.controls().autoRotateSpeed = 0.7;
   globe.controls().enableDamping = true;
-  globe.controls().dampingFactor = 0.15;
-  globe.controls().rotateSpeed = 1.2;
-  globe.controls().zoomSpeed = 1.5;
+  globe.controls().dampingFactor = 0.2;
+  globe.controls().rotateSpeed = 1.8;
+  globe.controls().zoomSpeed = 2.5;
   globe.controls().minDistance = 120;
   globe.controls().maxDistance = 800;
 
@@ -1076,7 +1107,16 @@ function plotMarkers(){
     });
   });
   }
+  // Add trade routes if enabled
+  if(showTradeRoutes){
+    TRADE_ROUTES.forEach(r=>{
+      arcs.push({...r, stroke:0.5, _trade:true, label:r.label});
+    });
+  }
   globe.arcsData(arcs);
+
+  // Fetch live earthquakes from USGS
+  fetchEarthquakes();
 
   // Zoom-aware marker sizing: scale markers and labels with camera altitude
   const onGlobeZoom = () => {
@@ -1341,7 +1381,7 @@ function setRegion(r){
     flatSvg.transition().duration(750).call(flatZoom.transform,d3.zoomIdentity.translate(flatW/2-scale*cx,flatH/2-scale*cy).scale(scale));
   } else {
     const pov=regionPOV[r]||regionPOV.world;
-    globe.pointOfView(pov,600);
+    globe.pointOfView(pov,400);
   }
 }
 
@@ -1379,12 +1419,38 @@ function updateStoreMarkers(){
   }
 }
 
+// === LIVE EARTHQUAKE FEED (USGS) ===
+async function fetchEarthquakes(){
+  try{
+    const r=await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson');
+    const data=await r.json();
+    earthquakeData=data.features.map(f=>({
+      lat:f.geometry.coordinates[1],lng:f.geometry.coordinates[0],
+      mag:f.properties.mag,place:f.properties.place,time:f.properties.time,
+      alt:0.01,size:Math.max(0.2,f.properties.mag/8),
+      color:f.properties.mag>=5?'#ff5f63':f.properties.mag>=4?'#ffb84c':'#ffee58',
+      popHead:`M${f.properties.mag.toFixed(1)} Earthquake`,
+      popMeta:f.properties.place,
+      popText:`Magnitude: ${f.properties.mag}<br>Location: ${f.properties.place}<br>Time: ${new Date(f.properties.time).toLocaleString()}`,
+      _quake:true
+    }));
+    if(globe){
+      const pts=(globe.pointsData()||[]).filter(p=>!p._quake);
+      globe.pointsData([...pts,...earthquakeData]);
+    }
+    // Update earthquake count in sensor grid
+    document.querySelectorAll('#quakeCount,#quakeCount2').forEach(el=>{if(el)el.textContent=earthquakeData.length});
+  }catch(e){console.warn('[Crucix] Earthquake fetch failed:',e.message)}
+}
+// Refresh earthquakes every 5 min
+setInterval(fetchEarthquakes,300000);
+
 function mapZoom(factor){
   if(isFlat && flatSvg && flatZoom){
     flatSvg.transition().duration(300).call(flatZoom.scaleBy,factor);
   } else if(globe){
     const pov=globe.pointOfView();
-    globe.pointOfView({altitude:pov.altitude/factor},200);
+    globe.pointOfView({altitude:pov.altitude/factor},120);
   }
 }
 
@@ -1567,7 +1633,16 @@ function renderLower(){
       <div class="delta-list">${deltaHtml}</div>
     </div>`;
 
-  document.getElementById('lowerGrid').innerHTML=`${tickerPanel}${osintPanel}${macroPanel}${ideasPanel}${deltaPanel}`;
+  const scPanel = `<div class="g-panel" style="border-color:rgba(255,95,99,0.2)">
+      <div class="sec-head"><h3 style="color:#ff5f63">Supply Chain Risk</h3><span class="badge" style="color:#ff5f63;border-color:rgba(255,95,99,0.3)">LIVE</span></div>
+      ${SC_DISRUPTIONS.map(d=>{
+        const col=d.sev==='critical'?'#ff5f63':d.sev==='warning'?'#ffb84c':d.sev==='elevated'?'#ffee58':'var(--accent2)';
+        return `<div class="econ-row" style="cursor:pointer" onclick="globe&&globe.pointOfView({lat:${d.lat},lng:${d.lng},altitude:0.6},400)"><span class="elabel">${d.name}</span><span class="eval" style="color:${col};font-size:9px;text-transform:uppercase">${d.sev}</span></div>`;
+      }).join('')}
+      <div style="font-size:9px;color:var(--dim);margin-top:6px;font-family:var(--mono)">${TRADE_ROUTES.length} active trade routes tracked</div>
+      <div style="font-size:9px;color:var(--dim);font-family:var(--mono)"><span id="quakeCount">0</span> earthquakes (M2.5+, 24h)</div>
+    </div>`;
+  document.getElementById('lowerGrid').innerHTML=`${tickerPanel}${osintPanel}${macroPanel}${scPanel}${ideasPanel}${deltaPanel}`;
 }
 
 // === RIGHT RAIL ===
