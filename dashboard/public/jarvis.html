@@ -462,7 +462,9 @@ let showStoreLayer = false;
 let showTradeRoutes = true;
 let earthquakeData = [];
 let flightsVisible = true;
-let lowPerfMode = localStorage.getItem('crucix_low_perf') === 'true';
+// Force high-perf mode — clear any stale localStorage
+localStorage.removeItem('crucix_low_perf');
+let lowPerfMode = false;
 let isFlat = shouldStartFlat();
 let flatSvg, flatProjection, flatPath, flatG, flatZoom, flatW, flatH;
 const signalGuideItems = [
@@ -1763,6 +1765,12 @@ function safeExternalUrl(raw){try{const u=new URL(raw,location.href);return u.pr
 
 // === BOOT SEQUENCE ===
 function runBoot(){
+  // Safety: force-complete boot after 6s no matter what
+  setTimeout(()=>{
+    const b=document.getElementById('boot');
+    if(b&&b.style.display!=='none'){b.style.display='none';document.getElementById('main').style.opacity='1';
+    ['bgRadial','bgGrid','scanline'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.opacity='1';});}
+  },6000);
   const acledStatus = D.acled?.totalEvents > 0 ? `<span class="ok">${D.acled.totalEvents} EVENTS</span>` : '<span style="color:var(--warn)">DEGRADED</span>';
   const lines=[
     {text:'INITIALIZING CRUCIX ENGINE v2.1.0',delay:0},
@@ -1981,10 +1989,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const hasInlineData = !!(D && D.meta);
   const canProbeApi = location.protocol !== 'file:';
 
-  if (hasInlineData && canProbeApi) {
-    // Hybrid mode: use inline data immediately, try to upgrade from API
-    init(); connectSSE();
-    fetch('/api/data').then(r=>r.json()).then(data=>{D=data;}).catch(()=>{});
+  if (hasInlineData) {
+    // Use inline data — try API upgrade silently
+    init();
+    if(canProbeApi) fetch('/api/data').then(r=>r.json()).then(data=>{D=data;connectSSE();}).catch(()=>{});
   } else if (hasInlineData) {
     // File mode: use inline data
     init();
