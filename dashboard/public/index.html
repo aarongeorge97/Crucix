@@ -599,7 +599,7 @@ function isWeakMobileDevice(){
 }
 
 function shouldStartFlat(){
-  if(lowPerfMode || isWeakMobileDevice()) return true;
+  if(isWeakMobileDevice()) return true;
   return false;
 }
 
@@ -618,7 +618,7 @@ function togglePerfMode(){
   const perfStatus = document.getElementById('perfStatus');
   if(perfStatus) perfStatus.textContent = lowPerfMode ? 'LOW' : 'HIGH';
   if(globe){
-    globe.controls().autoRotate = !lowPerfMode;
+    globe.controls().autoRotate = true;
     globe.arcDashAnimateTime(lowPerfMode ? 0 : 2000);
   }
   if(lowPerfMode && isMobileLayout() && !isFlat){
@@ -866,7 +866,7 @@ function initGlobe(){
   globe.pointOfView(regionPOV.world, 0);
 
   // Auto-rotate slowly
-  globe.controls().autoRotate = !lowPerfMode;
+  globe.controls().autoRotate = true;
   globe.controls().autoRotateSpeed = 0.7;
   globe.controls().enableDamping = true;
   globe.controls().dampingFactor = 0.2;
@@ -883,7 +883,7 @@ function initGlobe(){
     clearTimeout(rotateTimeout);
   });
   el.addEventListener('mouseup', () => {
-    rotateTimeout = setTimeout(() => { if(globe && !lowPerfMode) globe.controls().autoRotate = true; }, 10000);
+    rotateTimeout = setTimeout(() => { if(globe) globe.controls().autoRotate = true; }, 10000);
   });
 
   // Plot globe markers (preloaded but hidden)
@@ -1220,7 +1220,11 @@ function toggleMapMode(){
     requestAnimationFrame(() => {
       try {
         initGlobe();
-        if(globe && typeof globe.resumeAnimation === 'function') globe.resumeAnimation();
+        if(globe){
+          if(typeof globe.resumeAnimation === 'function') globe.resumeAnimation();
+          globe.controls().autoRotate = true;
+          globe.controls().autoRotateSpeed = 0.7;
+        }
         globeEl.style.display = 'block';
         setMapLoading(false);
       } catch {
